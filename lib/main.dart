@@ -9,6 +9,8 @@ import 'package:provider/provider.dart';
 import 'src/authentication.dart';
 import 'src/widgets.dart';
 
+String? current_user;
+
 void main() {
   runApp(
     ChangeNotifierProvider(
@@ -127,6 +129,7 @@ class ApplicationState extends ChangeNotifier {
     FirebaseAuth.instance.userChanges().listen((user) {
       if (user != null) {
         _loginState = ApplicationLoginState.loggedIn;
+        current_user = user.uid;
 
         _guestBookSubscription = FirebaseFirestore.instance
             .collection('guestbook')
@@ -139,6 +142,9 @@ class ApplicationState extends ChangeNotifier {
               GuestBookMessage(
                 name: document.data()['name'],
                 message: document.data()['text'],
+                dateTime: document.data()['dateTime'].toDate(),
+                docId: document.id,
+                userId: document.data()['userId'],
               ),
             );
           });
@@ -267,14 +273,18 @@ class ApplicationState extends ChangeNotifier {
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'name': FirebaseAuth.instance.currentUser!.displayName,
       'userId': FirebaseAuth.instance.currentUser!.uid,
+      'dateTime': DateTime.now(),
     });
   }
 }
 
 class GuestBookMessage {
-  GuestBookMessage({required this.name, required this.message});
+  GuestBookMessage({required this.name, required this.message, required this.dateTime, required this.docId, required this.userId});
   final String name;
   final String message;
+  final DateTime dateTime;
+  final String docId;
+  final String userId;
 }
 
 enum Attending { yes, no, unknown }
@@ -291,6 +301,7 @@ class GuestBook extends StatefulWidget {
 class _GuestBookState extends State<GuestBook> {
   final _formKey = GlobalKey<FormState>(debugLabel: '_GuestBookState');
   final _controller = TextEditingController();
+  late List<GuestBookMessage> localmessages;
 
   @override
   Widget build(BuildContext context) {
@@ -339,8 +350,64 @@ class _GuestBookState extends State<GuestBook> {
         ),
         SizedBox(height: 8),
         for (var message in widget.messages)
-          Paragraph('${message.name}: ${message.message}'),
-        SizedBox(height: 8),
+          current_user == message.userId ?
+              Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                Flexible(
+                  flex: 8,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Paragraph('${message.name}: ${message.message}'),
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(10, 0, 0, 0),
+                        child: Text(
+                          '${message.dateTime}',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+                Expanded(
+                    flex: 2,
+                    child: IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () {
+                        FirebaseFirestore.instance.collection('guestbook').doc(message.docId).delete();
+                      },
+                    ),
+                ),
+              ]) :
+              Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                Flexible(
+                  flex: 8,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Paragraph('${message.name}: ${message.message}'),
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(10, 0, 0, 0),
+                        child: Text(
+                          '${message.dateTime}',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+                Expanded(
+                    flex: 2,
+                    child: Container(),
+                ),
+              ])
+        ,
+        SizedBox(height: 20),
       ],
     );
   }
